@@ -137,6 +137,7 @@ exports.transfer = async (req, res) => {
     const fromAccount = await Account.findOne({
       accountNumber: fromAccountNumber,
     });
+    
     const toAccount = await Account.findOne({ accountNumber: toAccountNumber });
     if (!fromAccount || !toAccount)
       return res.status(404).json({ error: "Account not found" });
@@ -154,6 +155,7 @@ exports.transfer = async (req, res) => {
       description,
     });
     await transaction.save();
+    console.log('fromAccount:', fromAccount, 'toAccount:', toAccount, 'amount:', amount);
     res.json({ message: "Transfer successful." });
   } catch (err) {
     res.status(400).json({ error: err.message });
