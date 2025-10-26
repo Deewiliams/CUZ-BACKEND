@@ -3,6 +3,7 @@ const bcrypt = require("bcrypt");
 const User = require("../models/User");
 const Account = require("../models/Account");
 const Transaction = require("../models/Transaction");
+const { sendEmail } = require("../utils/email");
 // ...existing code...
 
 // Admin approves user
@@ -13,7 +14,23 @@ exports.approveUser = async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found" });
     user.approved = true;
     await user.save();
-    res.json({ message: "User approved." });
+
+    // Send approval email
+    let emailSent = false;
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Your Account Has Been Approved",
+        text: `Hello ${user.name},\n\nYour account has been approved by the admin. You can now log in and use your account.`,
+        html: `<p>Hello ${user.name},</p><p>Your account has been <b>approved</b> by the admin. You can now log in and use your account.</p>`,
+      });
+      emailSent = true;
+    } catch (emailErr) {
+      // Log but don't block approval if email fails
+      console.error("Failed to send approval email:", emailErr);
+    }
+
+    res.json({ message: "User approved.", emailSent });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
