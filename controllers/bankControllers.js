@@ -104,7 +104,22 @@ exports.deposit = async (req, res) => {
       description,
     });
     await transaction.save();
-    res.json({ message: "Deposit successful." });
+    res.json({
+      message: "Deposit successful.",
+      transaction: {
+        to: transaction.to,
+        amount: transaction.amount,
+        type: transaction.type,
+        description: transaction.description,
+        createdAt: transaction.createdAt,
+      },
+      account: {
+        accountNumber: account.accountNumber,
+        balance: account.balance,
+        type: account.type,
+        updatedAt: account.updatedAt || account.createdAt,
+      },
+    });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
