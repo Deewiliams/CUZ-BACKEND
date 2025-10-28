@@ -1,11 +1,15 @@
 const dotenv = require("dotenv");
 dotenv.config();
 const express = require("express");
+const cors = require("cors");
 const mongoose = require("mongoose");
 const addressRoutes = require("./routes/addressRoutes");
 const bankRoutes = require("./routes/bankRoutes");
 
 const app = express();
+
+// Enable CORS for all routes
+app.use(cors());
 
 // Middleware to parse JSON
 app.use(express.json());
