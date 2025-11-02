@@ -101,9 +101,11 @@ exports.transfer = async (req, res) => {
     } = req.body;
     const fromAccount = await Account.findOne({
       accountNumber: fromAccountNumber,
-    });
+    }).populate("user", "name email");
 
-    const toAccount = await Account.findOne({ accountNumber: toAccountNumber });
+    const toAccount = await Account.findOne({
+      accountNumber: toAccountNumber,
+    }).populate("user", "name email");
     if (!fromAccount || !toAccount)
       return res.status(404).json({ error: "Account not found" });
     if (fromAccount.balance < amount)
@@ -131,16 +133,26 @@ exports.transfer = async (req, res) => {
         accountNumber: fromAccount.accountNumber,
         remainingBalance: fromAccount.balance,
         accountType: fromAccount.type,
+        accountHolderName: fromAccount.user?.name || "Unknown",
+        accountHolderEmail: fromAccount.user?.email || "Unknown",
       },
       toAccount: {
         accountNumber: toAccount.accountNumber,
         newBalance: toAccount.balance,
         accountType: toAccount.type,
+        accountHolderName: toAccount.user?.name || "Unknown",
+        accountHolderEmail: toAccount.user?.email || "Unknown",
       },
       transaction: {
         transactionId: transaction._id,
-        from: fromAccount.accountNumber,
-        to: toAccount.accountNumber,
+        from: {
+          accountNumber: fromAccount.accountNumber,
+          accountHolderName: fromAccount.user?.name || "Unknown",
+        },
+        to: {
+          accountNumber: toAccount.accountNumber,
+          accountHolderName: toAccount.user?.name || "Unknown",
+        },
         amount: transaction.amount,
         type: transaction.type,
         description: transaction.description,
