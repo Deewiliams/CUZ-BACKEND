@@ -212,15 +212,15 @@ exports.transactions = async (req, res) => {
 
       let transferSummary = null;
       if (isOutgoing && transaction.type === "transfer") {
-        transferSummary = `Transferred $${transaction.amount} to ${
+        transferSummary = `Transferred k${transaction.amount} to ${
           transaction.to?.user?.name || "Unknown"
         } (${transaction.to?.accountNumber || "Unknown"})`;
       } else if (isIncoming && transaction.type === "transfer") {
-        transferSummary = `Received $${transaction.amount} from ${
+        transferSummary = `Received k${transaction.amount} from ${
           transaction.from?.user?.name || "Unknown"
         } (${transaction.from?.accountNumber || "Unknown"})`;
       } else if (transaction.type === "deposit") {
-        transferSummary = `Deposit of $${transaction.amount} to your account`;
+        transferSummary = `Deposit of k${transaction.amount} to your account`;
       }
 
       return {
