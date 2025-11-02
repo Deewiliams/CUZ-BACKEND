@@ -3,6 +3,7 @@ const bcrypt = require("bcrypt");
 const User = require("../models/User");
 const Account = require("../models/Account");
 const Transaction = require("../models/Transaction");
+const Beneficiary = require("../models/Beneficiary");
 const { sendEmail } = require("../utils/email");
 // ...existing code...
 
@@ -522,6 +523,383 @@ exports.getMyTransfers = async (req, res) => {
       return res.status(401).json({ error: "Access token expired" });
     }
     console.error("Get my transfers error:", err);
+    res.status(500).json({ error: "Server error occurred" });
+  }
+};
+
+// Add a new beneficiary
+exports.addBeneficiary = async (req, res) => {
+  try {
+    // Extract user info from JWT token
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Access token required" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+
+    const { accountNumber, nickname, description } = req.body;
+
+    // Validate input
+    if (!accountNumber || !nickname) {
+      return res.status(400).json({
+        error: "Account number and nickname are required",
+      });
+    }
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.approved && user.type !== "admin") {
+      return res.status(403).json({
+        error: "Account not approved. Please wait for admin approval.",
+      });
+    }
+
+    // Find user's own account
+    const userAccount = await Account.findOne({ user: userId });
+    if (!userAccount) {
+      return res.status(404).json({
+        error: "Your account not found",
+      });
+    }
+
+    // Check if user is trying to add their own account
+    if (userAccount.accountNumber === accountNumber) {
+      return res.status(400).json({
+        error: "You cannot add your own account as a beneficiary",
+      });
+    }
+
+    // Check if the beneficiary account exists
+    const beneficiaryAccount = await Account.findOne({
+      accountNumber: accountNumber,
+    }).populate("user", "name email type approved");
+
+    if (!beneficiaryAccount) {
+      return res.status(404).json({
+        error: "Account doesn't exist in the system",
+        message: "Please verify the account number and try again",
+      });
+    }
+
+    // Check if beneficiary account is approved
+    if (
+      !beneficiaryAccount.user.approved &&
+      beneficiaryAccount.user.type !== "admin"
+    ) {
+      return res.status(400).json({
+        error: "Beneficiary account is not approved yet",
+        message: "This account is pending admin approval",
+      });
+    }
+
+    // Check if beneficiary already exists
+    const existingBeneficiary = await Beneficiary.findOne({
+      userId: userId,
+      beneficiaryAccountNumber: accountNumber,
+    });
+
+    if (existingBeneficiary) {
+      return res.status(400).json({
+        error: "Beneficiary already exists",
+        message: `You have already added ${beneficiaryAccount.user.name} as a beneficiary`,
+        existingBeneficiary: {
+          nickname: existingBeneficiary.nickname,
+          accountNumber: existingBeneficiary.beneficiaryAccountNumber,
+          beneficiaryName: beneficiaryAccount.user.name,
+        },
+      });
+    }
+
+    // Create new beneficiary
+    const newBeneficiary = new Beneficiary({
+      userId: userId,
+      beneficiaryAccountNumber: accountNumber,
+      beneficiaryAccountId: beneficiaryAccount._id,
+      nickname: nickname,
+      description: description || `Transfer to ${beneficiaryAccount.user.name}`,
+    });
+
+    await newBeneficiary.save();
+
+    res.status(201).json({
+      message: "Beneficiary added successfully",
+      beneficiary: {
+        id: newBeneficiary._id,
+        nickname: newBeneficiary.nickname,
+        description: newBeneficiary.description,
+        accountNumber: beneficiaryAccount.accountNumber,
+        accountType: beneficiaryAccount.type,
+        beneficiaryName: beneficiaryAccount.user.name,
+        beneficiaryEmail: beneficiaryAccount.user.email,
+        createdAt: newBeneficiary.createdAt,
+      },
+    });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid access token" });
+    }
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Access token expired" });
+    }
+    if (err.code === 11000) {
+      return res.status(400).json({ error: "Beneficiary already exists" });
+    }
+    console.error("Add beneficiary error:", err);
+    res.status(500).json({ error: "Server error occurred" });
+  }
+};
+
+// Get all beneficiaries for the logged-in user
+exports.getBeneficiaries = async (req, res) => {
+  try {
+    // Extract user info from JWT token
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Access token required" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Get all beneficiaries for this user
+    const beneficiaries = await Beneficiary.find({
+      userId: userId,
+      isActive: true,
+    })
+      .populate({
+        path: "beneficiaryAccountId",
+        select: "accountNumber type user",
+        populate: {
+          path: "user",
+          select: "name email phone type",
+        },
+      })
+      .sort({ createdAt: -1 });
+
+    const formattedBeneficiaries = beneficiaries.map((beneficiary) => ({
+      id: beneficiary._id,
+      nickname: beneficiary.nickname,
+      description: beneficiary.description,
+      accountNumber: beneficiary.beneficiaryAccountId.accountNumber,
+      accountType: beneficiary.beneficiaryAccountId.type,
+      beneficiaryDetails: {
+        name: beneficiary.beneficiaryAccountId.user.name,
+        email: beneficiary.beneficiaryAccountId.user.email,
+        phone: beneficiary.beneficiaryAccountId.user.phone,
+        userType: beneficiary.beneficiaryAccountId.user.type,
+      },
+      createdAt: beneficiary.createdAt,
+      isActive: beneficiary.isActive,
+    }));
+
+    res.json({
+      message: "Beneficiaries retrieved successfully",
+      user: {
+        name: user.name,
+        email: user.email,
+      },
+      totalBeneficiaries: formattedBeneficiaries.length,
+      beneficiaries: formattedBeneficiaries,
+    });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid access token" });
+    }
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Access token expired" });
+    }
+    console.error("Get beneficiaries error:", err);
+    res.status(500).json({ error: "Server error occurred" });
+  }
+};
+
+// Transfer money to a beneficiary
+exports.transferToBeneficiary = async (req, res) => {
+  try {
+    // Extract user info from JWT token
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Access token required" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+
+    const { beneficiaryId, amount, description } = req.body;
+
+    // Validate input
+    if (!beneficiaryId || !amount || amount <= 0) {
+      return res.status(400).json({
+        error: "Beneficiary ID and valid amount are required",
+      });
+    }
+
+    // Find user and their account
+    const userAccount = await Account.findOne({ user: userId }).populate(
+      "user",
+      "name email"
+    );
+    if (!userAccount) {
+      return res.status(404).json({ error: "Your account not found" });
+    }
+
+    // Find the beneficiary
+    const beneficiary = await Beneficiary.findOne({
+      _id: beneficiaryId,
+      userId: userId,
+      isActive: true,
+    }).populate("beneficiaryAccountId");
+
+    if (!beneficiary) {
+      return res.status(404).json({
+        error: "Beneficiary not found",
+        message: "The selected beneficiary doesn't exist or has been removed",
+      });
+    }
+
+    const beneficiaryAccount = beneficiary.beneficiaryAccountId;
+
+    // Check sufficient balance
+    if (userAccount.balance < amount) {
+      return res.status(400).json({
+        error: "Insufficient funds",
+        currentBalance: userAccount.balance,
+        requestedAmount: amount,
+      });
+    }
+
+    // Perform the transfer
+    userAccount.balance -= amount;
+    beneficiaryAccount.balance += amount;
+
+    await userAccount.save();
+    await beneficiaryAccount.save();
+
+    // Create transaction record
+    const transaction = new Transaction({
+      from: userAccount._id,
+      to: beneficiaryAccount._id,
+      amount,
+      type: "transfer",
+      description: description || `Transfer to ${beneficiary.nickname}`,
+    });
+
+    await transaction.save();
+
+    // Get updated beneficiary details
+    const updatedBeneficiary = await Beneficiary.findById(
+      beneficiaryId
+    ).populate({
+      path: "beneficiaryAccountId",
+      populate: {
+        path: "user",
+        select: "name email",
+      },
+    });
+
+    res.json({
+      message: "Transfer to beneficiary successful",
+      transfer: {
+        amount: amount,
+        description: description || `Transfer to ${beneficiary.nickname}`,
+        timestamp: new Date(),
+        beneficiaryNickname: beneficiary.nickname,
+      },
+      fromAccount: {
+        accountNumber: userAccount.accountNumber,
+        remainingBalance: userAccount.balance,
+        accountHolderName: userAccount.user.name,
+      },
+      toAccount: {
+        accountNumber: beneficiaryAccount.accountNumber,
+        newBalance: beneficiaryAccount.balance,
+        beneficiaryName: updatedBeneficiary.beneficiaryAccountId.user.name,
+        nickname: beneficiary.nickname,
+      },
+      transaction: {
+        transactionId: transaction._id,
+        amount: transaction.amount,
+        type: transaction.type,
+        description: transaction.description,
+        createdAt: transaction.createdAt,
+      },
+    });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid access token" });
+    }
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Access token expired" });
+    }
+    console.error("Transfer to beneficiary error:", err);
+    res.status(500).json({ error: "Server error occurred" });
+  }
+};
+
+// Remove a beneficiary
+exports.removeBeneficiary = async (req, res) => {
+  try {
+    // Extract user info from JWT token
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Access token required" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+
+    const { beneficiaryId } = req.params;
+
+    // Find and remove the beneficiary
+    const beneficiary = await Beneficiary.findOne({
+      _id: beneficiaryId,
+      userId: userId,
+    }).populate({
+      path: "beneficiaryAccountId",
+      populate: {
+        path: "user",
+        select: "name",
+      },
+    });
+
+    if (!beneficiary) {
+      return res.status(404).json({
+        error: "Beneficiary not found",
+      });
+    }
+
+    // Soft delete by setting isActive to false
+    beneficiary.isActive = false;
+    await beneficiary.save();
+
+    res.json({
+      message: "Beneficiary removed successfully",
+      removedBeneficiary: {
+        nickname: beneficiary.nickname,
+        beneficiaryName: beneficiary.beneficiaryAccountId.user.name,
+        accountNumber: beneficiary.beneficiaryAccountNumber,
+      },
+    });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid access token" });
+    }
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Access token expired" });
+    }
+    console.error("Remove beneficiary error:", err);
     res.status(500).json({ error: "Server error occurred" });
   }
 };
