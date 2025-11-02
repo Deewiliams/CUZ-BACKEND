@@ -303,3 +303,78 @@ exports.transactions = async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 };
+
+// Get user balance (requires authentication)
+exports.getUserBalance = async (req, res) => {
+  try {
+    // Extract user info from JWT token
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Access token required" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+
+    // Find user and their account
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.approved && user.type !== "admin") {
+      return res.status(403).json({
+        error: "Account not approved. Please wait for admin approval.",
+      });
+    }
+
+    // Find user's account
+    const account = await Account.findOne({ user: userId }).populate(
+      "user",
+      "name email"
+    );
+    if (!account) {
+      return res.status(404).json({
+        error: "No account found for this user",
+        message: "Please contact admin to create your account",
+      });
+    }
+
+    // Get recent transactions count for additional info
+    const recentTransactionsCount = await Transaction.countDocuments({
+      $or: [{ from: account._id }, { to: account._id }],
+      createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, // Last 30 days
+    });
+
+    res.json({
+      message: "Balance retrieved successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        type: user.type,
+        approved: user.approved,
+      },
+      account: {
+        accountNumber: account.accountNumber,
+        accountType: account.type,
+        currentBalance: account.balance,
+        createdAt: account.createdAt,
+        lastUpdated: new Date(),
+      },
+      summary: {
+        recentTransactionsCount: recentTransactionsCount,
+        accountStatus: "active",
+      },
+    });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid access token" });
+    }
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Access token expired" });
+    }
+    console.error("Get balance error:", err);
+    res.status(500).json({ error: "Server error occurred" });
+  }
+};
