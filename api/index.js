@@ -13,8 +13,7 @@ const corsOptions = {
     const allowedOrigins = [
       "http://localhost:3000",
       "http://localhost:3001",
-      "https://soschoir.vercel.app",
-      "https://soschoir-git-staging-desire-irankundas-projects.vercel.app",
+      "https://cuz-bank-system.vercel.app",
     ];
 
     // Allow requests with no origin (mobile apps, Postman, etc.)
@@ -110,10 +109,20 @@ const connectDB = async () => {
       console.log("Connecting to Local MongoDB...");
     }
 
-    const conn = await mongoose.connect(mongoURI);
+    console.log("MongoDB URI exists:", !!mongoURI);
+    console.log("Attempting connection to:", mongoURI.includes('mongodb+srv') ? 'MongoDB Atlas' : 'Local MongoDB');
+
+    const conn = await mongoose.connect(mongoURI, {
+      serverSelectionTimeoutMS: 30000, // 30 second timeout (increased)
+      socketTimeoutMS: 45000, // 45 second socket timeout
+      connectTimeoutMS: 30000, // 30 second connection timeout
+      bufferMaxEntries: 0, // Disable mongoose buffering
+      bufferCommands: false, // Disable mongoose buffering
+      maxPoolSize: 10, // Maintain up to 10 socket connections
+    });
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
-    console.log(`Database:: ${conn.connection.name}`);
+    console.log(`Database: ${conn.connection.name}`);
   } catch (error) {
     console.error("Database connection error:", error.message);
     console.error("Full error:", error);
