@@ -129,10 +129,10 @@ const connectDB = async (retries = 3) => {
       minPoolSize: 0, // No minimum connections
       maxIdleTimeMS: 30000, // Close connections after 30 seconds idle
       serverApi: {
-        version: '1',
+        version: "1",
         strict: true,
         deprecationErrors: true,
-      }
+      },
     });
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
@@ -144,12 +144,14 @@ const connectDB = async (retries = 3) => {
     // Retry connection if retries remaining
     if (retries > 0) {
       console.log(`Retrying connection... (${retries} attempts left)`);
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+      await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
       return connectDB(retries - 1);
     }
 
     // Don't crash the app, just continue without database
-    console.warn("All connection attempts failed. Continuing without database...");
+    console.warn(
+      "All connection attempts failed. Continuing without database..."
+    );
   }
 };
 

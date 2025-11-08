@@ -43,10 +43,10 @@ exports.register = async (req, res) => {
       termsOfService,
     } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     // Auto-approve admin users
     const isAutoApproved = type === "admin";
-    
+
     const user = new User({
       name,
       email,
@@ -76,8 +76,8 @@ exports.register = async (req, res) => {
     const userObj = user.toObject();
     delete userObj.password;
     res.status(201).json({
-      message: isAutoApproved 
-        ? "Admin registration successful. Account automatically approved." 
+      message: isAutoApproved
+        ? "Admin registration successful. Account automatically approved."
         : "Registration successful. Await admin approval.",
       user: userObj,
       account: {

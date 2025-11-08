@@ -13,6 +13,7 @@ router.post("/reset-password/:token", authControllers.resetPassword);
 router.post("/approve", bankControllers.approveUser);
 router.post("/deposit", bankControllers.deposit);
 router.get("/deposits", bankControllers.getAllDeposits);
+router.get("/deposits/recent", bankControllers.getRecentDeposits);
 router.post("/transfer", bankControllers.transfer);
 router.get("/transactions/:accountNumber", bankControllers.transactions);
 router.get("/balance", bankControllers.getUserBalance);
