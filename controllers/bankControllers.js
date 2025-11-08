@@ -92,6 +92,89 @@ exports.deposit = async (req, res) => {
   }
 };
 
+// Get all deposits
+exports.getAllDeposits = async (req, res) => {
+  try {
+    const deposits = await Transaction.find({ type: "deposit" })
+      .populate({
+        path: "to",
+        populate: {
+          path: "user",
+          select: "name email phone type",
+        },
+      })
+      .sort({ createdAt: -1 }); // Sort by newest first
+
+    const formattedDeposits = deposits.map((deposit) => ({
+      id: deposit._id,
+      amount: deposit.amount,
+      description: deposit.description,
+      createdAt: deposit.createdAt,
+      account: {
+        accountNumber: deposit.to.accountNumber,
+        type: deposit.to.type,
+        user: {
+          name: deposit.to.user.name,
+          email: deposit.to.user.email,
+          phone: deposit.to.user.phone,
+          type: deposit.to.user.type,
+        },
+      },
+    }));
+
+    res.json({
+      message: "All deposits retrieved successfully",
+      count: formattedDeposits.length,
+      deposits: formattedDeposits,
+    });
+  } catch (err) {
+    console.error("Get all deposits error:", err);
+    res.status(500).json({ error: "Failed to retrieve deposits" });
+  }
+};
+
+// Get three most recent deposits
+exports.getRecentDeposits = async (req, res) => {
+  try {
+    const recentDeposits = await Transaction.find({ type: "deposit" })
+      .populate({
+        path: "to",
+        populate: {
+          path: "user",
+          select: "name email phone type",
+        },
+      })
+      .sort({ createdAt: -1 }) // Sort by newest first
+      .limit(3); // Limit to 3 most recent
+
+    const formattedDeposits = recentDeposits.map((deposit) => ({
+      id: deposit._id,
+      amount: deposit.amount,
+      description: deposit.description,
+      createdAt: deposit.createdAt,
+      account: {
+        accountNumber: deposit.to.accountNumber,
+        type: deposit.to.type,
+        user: {
+          name: deposit.to.user.name,
+          email: deposit.to.user.email,
+          phone: deposit.to.user.phone,
+          type: deposit.to.user.type,
+        },
+      },
+    }));
+
+    res.json({
+      message: "Three most recent deposits retrieved successfully",
+      count: formattedDeposits.length,
+      deposits: formattedDeposits,
+    });
+  } catch (err) {
+    console.error("Get recent deposits error:", err);
+    res.status(500).json({ error: "Failed to retrieve recent deposits" });
+  }
+};
+
 // Transfer money
 exports.transfer = async (req, res) => {
   try {
