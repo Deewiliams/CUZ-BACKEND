@@ -10,6 +10,7 @@ function generateAccountNumber(type) {
     savings: "SAV",
     person: "PER",
     school: "SCH",
+    admin: "ADM",
   };
   const prefix = prefixMap[type] || "GEN";
   const uniquePart =
@@ -33,10 +34,19 @@ exports.register = async (req, res) => {
       studentId,
       course,
       schoolName,
+      yearOfStudy,
+      expectedCompletion,
       businessName,
       registrationNumber,
+      nationalId,
+      tpinNumber,
+      termsOfService,
     } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Auto-approve admin users
+    const isAutoApproved = type === "admin";
+
     const user = new User({
       name,
       email,
@@ -48,8 +58,14 @@ exports.register = async (req, res) => {
       studentId,
       course,
       schoolName,
+      yearOfStudy,
+      expectedCompletion,
       businessName,
       registrationNumber,
+      nationalId,
+      tpinNumber,
+      termsOfService,
+      approved: isAutoApproved, // Auto-approve admin users
     });
     await user.save();
     // Create account with generated account number
@@ -60,7 +76,9 @@ exports.register = async (req, res) => {
     const userObj = user.toObject();
     delete userObj.password;
     res.status(201).json({
-      message: "Registration successful. Await admin approval.",
+      message: isAutoApproved
+        ? "Admin registration successful. Account automatically approved."
+        : "Registration successful. Await admin approval.",
       user: userObj,
       account: {
         accountNumber: account.accountNumber,
@@ -71,11 +89,9 @@ exports.register = async (req, res) => {
     });
   } catch (err) {
     if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
-      return res
-        .status(409)
-        .json({
-          error: "Email already exists. Please use a different email address.",
-        });
+      return res.status(409).json({
+        error: "Email already exists. Please use a different email address.",
+      });
     }
     res.status(400).json({ error: err.message });
   }

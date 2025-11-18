@@ -9,19 +9,28 @@ const userSchema = new mongoose.Schema({
   dob: { type: Date },
   type: {
     type: String,
-    enum: ["student", "business", "savings", "person", "school"],
+    enum: ["student", "business", "savings", "person", "school", "admin"],
     required: true,
   },
   // Student-specific fields
   studentId: { type: String },
   course: { type: String },
   schoolName: { type: String },
+  yearOfStudy: { type: String },
+  expectedCompletion: { type: String },
   // Business-specific fields
   businessName: { type: String },
   registrationNumber: { type: String },
+  // Identity and compliance fields
+  nationalId: { type: String },
+  tpinNumber: { type: String },
+  termsOfService: { type: Boolean, default: false },
   // Approval and timestamps
   approved: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
+  // Password reset fields
+  resetPasswordToken: { type: String },
+  resetPasswordExpires: { type: Date },
 });
 
 module.exports = mongoose.model("User", userSchema);
